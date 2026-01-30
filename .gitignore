@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.env
+*.venv
+
+# Data
+data/processed/*
+!data/processed/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Environment
+.conda/
+.venv/
+
+# IDE
+.vscode/
+.pydevproject
