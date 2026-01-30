@@ -4,7 +4,7 @@ Ethiopia Financial Inclusion Forecasting Project
 
 This script performs comprehensive EDA on the financial inclusion dataset.
 """
-
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,9 +21,12 @@ sns.set_palette("husl")
 class FinancialInclusionEDA:
     """Comprehensive EDA for Ethiopia Financial Inclusion data"""
     
-    def __init__(self, data_path=None):
-        """Initialize with dataset path"""
+    def __init__(self, data_path=None, output_dir=None):
+        """Initialize with dataset path and output directory"""
         self.data_path = data_path
+        self.output_dir = Path(output_dir) if output_dir else Path.cwd() / "output"
+        self.output_dir.mkdir(parents=True, exist_ok=True)  # Create output directory
+        
         self.data = None
         self.key_insights = []
         self.figures = []
@@ -36,7 +39,7 @@ class FinancialInclusionEDA:
         
         if self.data_path:
             self.data = pd.read_csv(self.data_path)
-            print(f"✓ Loaded dataset: {len(self.data)} records")
+            print(f"✓ Loaded dataset: {len(self.data)} records from {self.data_path}")
         else:
             print("⚠ No data path provided - using sample data")
             self.create_sample_data()
@@ -83,7 +86,8 @@ class FinancialInclusionEDA:
             print("\nRecords by Pillar:")
             pillar_summary = self.data['pillar'].value_counts(dropna=False)
             for pillar, count in pillar_summary.items():
-                pct = (count / len(self.data[self.data['pillar'].notna()])) * 100
+                total_valid = len(self.data[self.data['pillar'].notna()])
+                pct = (count / total_valid) * 100 if total_valid > 0 else 0
                 print(f"  {str(pillar):15s}: {count:5d} ({pct:5.1f}%)")
                 
         if 'source_type' in self.data.columns:
@@ -132,9 +136,10 @@ class FinancialInclusionEDA:
             ax.set_ylabel('Indicator', fontsize=12)
             plt.tight_layout()
             
-            fig_path = '/home/claude/ethiopia_fi_project/fig_temporal_coverage.png'
+            # Save to project output directory
+            fig_path = self.output_dir / "fig_temporal_coverage.png"
             plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-            self.figures.append(fig_path)
+            self.figures.append(str(fig_path))
             print(f"✓ Saved figure: {fig_path}")
             plt.close()
         
@@ -254,9 +259,10 @@ class FinancialInclusionEDA:
         ax.legend()
         plt.tight_layout()
         
-        fig_path = '/home/claude/ethiopia_fi_project/fig_account_ownership_trend.png'
+        # Save to project output directory
+        fig_path = self.output_dir / "fig_account_ownership_trend.png"
         plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-        self.figures.append(fig_path)
+        self.figures.append(str(fig_path))
         print(f"\n✓ Saved figure: {fig_path}")
         plt.close()
         
@@ -277,9 +283,16 @@ class FinancialInclusionEDA:
         print("5. GENDER GAP ANALYSIS")
         print("="*80)
         
+        # Check if gender column exists
+        if 'gender' not in self.data.columns:
+            print("⚠ No gender column found in dataset")
+            print("   Recommendation: Enrich dataset with Findex gender breakdowns")
+            return
+            
         gender_data = self.data[
             (self.data['gender'].isin(['male', 'female'])) &
-            (self.data['pillar'] == 'ACCESS')
+            (self.data['pillar'] == 'ACCESS') &
+            (self.data['record_type'] == 'observation')
         ].copy()
         
         if len(gender_data) == 0:
@@ -291,7 +304,8 @@ class FinancialInclusionEDA:
         pivot = gender_data.pivot_table(
             index='observation_date',
             columns='gender',
-            values='value_numeric'
+            values='value_numeric',
+            aggfunc='mean'
         )
         
         if 'male' in pivot.columns and 'female' in pivot.columns:
@@ -303,11 +317,11 @@ class FinancialInclusionEDA:
                 male = row['male'] if pd.notna(row['male']) else 'N/A'
                 female = row['female'] if pd.notna(row['female']) else 'N/A'
                 gap = row['gap'] if pd.notna(row['gap']) else 'N/A'
-                print(f"  {year}: Male {male}%, Female {female}%, Gap {gap}pp")
+                print(f"  {year}: Male {male:.1f}%, Female {female:.1f}%, Gap {gap:.1f}pp")
                 
             self.key_insights.append({
                 'category': 'Gender',
-                'insight': f"Significant gender gap of {pivot['gap'].iloc[-1]:.0f}pp in account ownership, " +
+                'insight': f"Significant gender gap of ~{pivot['gap'].mean():.0f}pp in account ownership, " +
                           "with males substantially ahead of females"
             })
         
@@ -320,8 +334,8 @@ class FinancialInclusionEDA:
         print("="*80)
         
         usage_data = self.data[
-            (self.data['pillar'] == 'USAGE') |
-            (self.data['indicator_code'].str.contains('DIGITAL|MOBILE|PAYMENT', na=False))
+            ((self.data['pillar'] == 'USAGE') | 
+             (self.data['indicator_code'].str.contains('DIGITAL|MOBILE|PAYMENT', na=False, case=False)))
         ].copy()
         
         if len(usage_data) == 0:
@@ -352,8 +366,8 @@ class FinancialInclusionEDA:
         print("="*80)
         
         infra_data = self.data[
-            (self.data['indicator_code'].str.contains('INFRA|4G|MOBILE|ATM|AGENT', na=False)) |
-            (self.data['category'] == 'infrastructure')
+            (self.data['indicator_code'].str.contains('INFRA|4G|MOBILE|ATM|AGENT', na=False, case=False)) |
+            (self.data.get('category', pd.Series([None]*len(self.data))).eq('infrastructure'))
         ].copy()
         
         if len(infra_data) == 0:
@@ -401,7 +415,7 @@ class FinancialInclusionEDA:
         
         for i, (date, name) in enumerate(zip(event_dates, event_names)):
             ax.axvline(x=date, color='red', alpha=0.5, linestyle='--', linewidth=1)
-            ax.text(date, 0.9 - (i % 5) * 0.15, name, rotation=45, ha='right', 
+            ax.text(date, 0.9 - (i % 5) * 0.15, name[:30], rotation=45, ha='right',  # Truncate long names
                    fontsize=8, color='red')
         
         # Overlay account ownership trend if available
@@ -425,9 +439,10 @@ class FinancialInclusionEDA:
         ax.set_yticks([])
         plt.tight_layout()
         
-        fig_path = '/home/claude/ethiopia_fi_project/fig_event_timeline.png'
+        # Save to project output directory
+        fig_path = self.output_dir / "fig_event_timeline.png"
         plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-        self.figures.append(fig_path)
+        self.figures.append(str(fig_path))
         print(f"\n✓ Saved figure: {fig_path}")
         plt.close()
         
@@ -467,14 +482,16 @@ class FinancialInclusionEDA:
                             
                 # Create correlation heatmap
                 fig, ax = plt.subplots(figsize=(10, 8))
-                sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm',
+                mask = np.triu(np.ones_like(corr_matrix, dtype=bool))  # Hide upper triangle
+                sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='coolwarm',
                            center=0, square=True, ax=ax, cbar_kws={'label': 'Correlation'})
                 ax.set_title('Indicator Correlation Matrix', fontsize=14, fontweight='bold')
                 plt.tight_layout()
                 
-                fig_path = '/home/claude/ethiopia_fi_project/fig_correlation_matrix.png'
+                # Save to project output directory
+                fig_path = self.output_dir / "fig_correlation_matrix.png"
                 plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-                self.figures.append(fig_path)
+                self.figures.append(str(fig_path))
                 print(f"\n✓ Saved figure: {fig_path}")
                 plt.close()
         else:
@@ -564,9 +581,9 @@ class FinancialInclusionEDA:
         
         report += "## Key Findings\n\n"
         for i, insight in enumerate(self.key_insights, 1):
-            report += f"{i}. **[{insight['category']}]** {insight['insight']}\n"
+            report += f"{i}. **[{insight['category']}]** {insight['insight']}\n\n"
             
-        report += "\n## Data Quality Assessment\n\n"
+        report += "## Data Quality Assessment\n\n"
         report += f"- **Total Records:** {len(self.data)}\n"
         if 'record_type' in self.data.columns:
             for rtype, count in self.data['record_type'].value_counts().items():
@@ -574,7 +591,7 @@ class FinancialInclusionEDA:
                 
         report += "\n## Visualizations Generated\n\n"
         for fig_path in self.figures:
-            fig_name = fig_path.split('/')[-1]
+            fig_name = Path(fig_path).name
             report += f"- `{fig_name}`\n"
             
         report += "\n## Next Steps\n\n"
@@ -583,9 +600,9 @@ class FinancialInclusionEDA:
         report += "3. **Scenario Analysis:** Model different growth trajectories under various assumptions\n"
         report += "4. **Dashboard Development:** Create interactive visualization for stakeholders\n"
         
-        # Save report
-        report_path = '/home/claude/ethiopia_fi_project/eda_report.md'
-        with open(report_path, 'w') as f:
+        # Save report to output directory
+        report_path = self.output_dir / "eda_report.md"
+        with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report)
             
         print(f"✓ EDA report saved to: {report_path}")
@@ -616,18 +633,19 @@ class FinancialInclusionEDA:
         print("="*80)
         print(f"\nGenerated {len(self.figures)} visualizations")
         print(f"Identified {len(self.key_insights)} key insights")
-        print("\nOutputs:")
-        print("  • EDA Report: eda_report.md")
-        print("  • Visualizations: fig_*.png")
+        print(f"\nAll outputs saved to: {self.output_dir}")
         print("\nReady to proceed to forecasting phase!")
         print()
 
 
 def main():
     """Main execution function"""
-    # Initialize EDA
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
+    
+    # Initialize EDA with proper paths
     eda = FinancialInclusionEDA(
-        data_path='/home/claude/ethiopia_fi_project/ethiopia_fi_unified_data_enriched.csv'
+        data_path=PROJECT_ROOT / "data" / "processed" / "ethiopia_fi_unified_data_enriched.csv",
+        output_dir=PROJECT_ROOT / "output" / "figures"
     )
     
     # Run full analysis
