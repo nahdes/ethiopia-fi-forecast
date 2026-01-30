@@ -1,9 +1,9 @@
 import sys
-import os
+from pathlib import Path
 from DataExploration import DataEnrichmentPipeline
 from ExploratoryData import FinancialInclusionEDA
 
-from pathlib import Path
+# Define PROJECT_ROOT ONCE at module level
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 def print_banner(text):
@@ -20,7 +20,7 @@ def main():
     print_banner("ETHIOPIA FINANCIAL INCLUSION FORECASTING PROJECT")
     print_banner("COMPREHENSIVE DATA ANALYSIS PIPELINE")
     
-    # Configuration
+    # Configuration - USE GLOBAL PROJECT_ROOT (no reassignment!)
     data_path = PROJECT_ROOT / "data" / "raw" / "ethiopia_fi_unified_data.csv"
     
     print("\n📋 PROJECT OVERVIEW")
@@ -42,7 +42,6 @@ def main():
     print_banner("TASK 1: DATA EXPLORATION & ENRICHMENT")
     
     try:
-        # Initialize and run Task 1
         pipeline = DataEnrichmentPipeline(
             data_path=data_path,
             impact_links_path=None,
@@ -64,9 +63,11 @@ def main():
     print_banner("TASK 2: EXPLORATORY DATA ANALYSIS")
     
     try:
-        # Initialize and run Task 2
+        # Construct enriched data path USING GLOBAL PROJECT_ROOT (no reassignment!)
+        enriched_data_path = PROJECT_ROOT / "data" / "processed" / "ethiopia_fi_unified_data_enriched.csv"
+        
         eda = FinancialInclusionEDA(
-            data_path='/home/claude/ethiopia_fi_project/ethiopia_fi_unified_data_enriched.csv'
+            data_path=str(enriched_data_path)  # Convert to string for pandas
         )
         
         eda.run_full_analysis()
@@ -125,8 +126,6 @@ def main():
     print("="*80)
     
     print("\n✅ ALL TASKS COMPLETED SUCCESSFULLY!")
-    print("\n📁 All outputs saved to: /home/claude/ethiopia_fi_project/\n")
-    
     return True
 
 
