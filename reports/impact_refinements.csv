@@ -1,0 +1,2 @@
+record_id,indicator,original_estimate,refined_estimate,confidence_before,confidence_after,reason
+IMP_ENR_001,ACC_OWNERSHIP,,,empirical,empirical,No validation data available
